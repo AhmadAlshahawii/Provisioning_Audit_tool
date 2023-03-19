@@ -1,6 +1,9 @@
 ﻿import csv, re, time
 import json
+import os
 
+VERSION = 2.0
+WelcomeMsg = f"\t\tProvisioning Audit Tool v{VERSION}\n"
 
 def parse_pg(filepath, outputfile=None):
     # define a list with a CSV header
@@ -300,7 +303,9 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
 #parse_mtas(r"D:\Provisioning_Auto\MTAS_BT8_1711", "mtas.csv")
 #parse_pg(r"C:\Users\admin\Desktop\OMAR_DIALS\OMAR_Dials.txt.log","pg.csv")
 #parse_enum(r"C:\Users\admin\Desktop\OMAR_DIALS\R1IPW07_2022-11-22_2_56_04 PM.log", "enum.csv")
+print(WelcomeMsg)
 read_dials_from_file(r"Batch.csv",  pg_path=r"PG",
                                     mtas_path=r"MTAS", 
                                     ism_path=r"ISM", 
                                     enum_path=r"ENUM")
+os.system('pause')
