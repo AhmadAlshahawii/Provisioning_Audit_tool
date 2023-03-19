@@ -1,0 +1,2 @@
+pyarmor==7.7.4
+pyinstaller==5.9.0
