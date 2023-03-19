@@ -5,14 +5,21 @@ import json
 def parse_pg(filepath, outputfile=None):
     # define a list with a CSV header
     requests = [
-                    ['Dials','Status','Total','Total-TICK215','Total-APN586','Failed']
+                    ['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed']
                ]
     requests_count=0
     requests_failed=0
     requests_tick=0
+    requests_tickk=0
+    requests_ttick=0
     requests_apn=0
+    requests_stats=0
     with open(filepath,'r') as file:
         tick_found=False
+        tick215_found=False
+        tick190_found=False
+        tick201_found=False
+        stats_found=False
         apn_found=False
         for line in file:
             if "hgsdp:msisdn=" in line.lower():
@@ -20,31 +27,63 @@ def parse_pg(filepath, outputfile=None):
                 requests_count+=1
                 requests.append([matches[0]])
             
-            if "TICK-215" in line:
-                tick_found=True
-                requests_tick+=1
-            
             if "586                           83    NO             IPV4    15" in line:
                 apn_found=True
                 requests_apn+=1
+            
+            if (not tick_found):
+                if "TICK-215" in line:
+                    tick215_found=True
+                    tick_found=True
+                    requests_tick+=1
+
+                if "TICK-190" in line:
+                    tick190_found=True
+                    tick_found=True
+                    requests_tickk+=1
                 
+                if "TICK-201" in line:
+                    tick201_found=True
+                    tick_found=True
+                    requests_ttick+=1
+                
+            if "NOT CONNECTED" in line:
+                stats_found=True
+                requests_stats+=1
+                            
             if line.startswith("END"):
                 reqstatus = []
                 if apn_found:
-                    reqstatus.append("APN")
-                if tick_found:    
+                    reqstatus.append("APN586")
+                if tick215_found:    
                     reqstatus.append("TICK-215")
-                if (not apn_found or not tick_found):
+                if tick190_found:    
+                    reqstatus.append("TICK-190")
+                if tick201_found:    
+                    reqstatus.append("TICK-201")    
+                if stats_found:    
+                    reqstatus.append("NOT CONNECTED")
+                
+                if (stats_found):
                     requests_failed+=1
+                elif (not apn_found and not tick_found):
+                    #print("Failed: " +" "+ str(requests[requests_count]) +" "+ str(tick215_found) +" "+str(tick190_found) +" "+ str(tick201_found) )
+                    requests_failed+=1                    
 
                 if not reqstatus:
                     reqstatus.extend(["Failed"])
 
                 requests[requests_count].extend([(",").join(reqstatus)])
-                tick_found=False
+                tick215_found=False
+                tick190_found=False
+                tick201_found=False
+                stats_found=False
                 apn_found=False
+                tick_found=False
+                
+    #['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed']
     try:    
-        requests[1].extend([requests_count,requests_tick,requests_apn,requests_failed])
+        requests[1].extend([requests_count,requests_tick,requests_apn,requests_tickk,requests_ttick,requests_stats,requests_failed])
     except:
         print(requests_count)
     
@@ -193,7 +232,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
             if entry[0] in alldata:
                 alldata[entry[0]]['ISM']=entry[1]
             else:
-                print(f"ISM ignoring line: \"{entry}\"") 
+                print(f"ISM: ignoring line: \"{entry}\"") 
     except:
         print("ISM ERROR: Faulty dial:" + str(entry))
         
@@ -242,10 +281,10 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
                 print(key)
                 print(value)
                 print("****")
-    
+    #['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed']
     # Summary
     summary_text= ["Summary:\n",
-                    f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tFailed:{pg_data[1][5]}\n",
+                    f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tTICK-190:{pg_data[1][5]}\n\tTICK-201:{pg_data[1][6]}\n\tNOT CONNECTED:{pg_data[1][7]}\n\tFailed:{pg_data[1][8]}\n",
                     f"ISM:\n\tTotal:{ism_data[1][2]}\n\tSuccess:{ism_data[1][3]}\n\tFailed:{ism_data[1][4]}\n",
                     f"MTAS:\n\tTotal:{mtas_data[1][3]}\n\tSuccess:{mtas_data[1][4]}\n\tFailed:{mtas_data[1][5]}\n\tFailed (excl. login failed):{mtas_data[1][6]}\n\tHave DCF:{mtas_data[1][7]}\n",
                     f"ENUM:\n\tTotal:{enum_data[1][2]}\n\tSuccess:{enum_data[1][3]}\n\tFailed:{enum_data[1][4]}"
@@ -261,7 +300,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
 #parse_mtas(r"D:\Provisioning_Auto\MTAS_BT8_1711", "mtas.csv")
 #parse_pg(r"C:\Users\admin\Desktop\OMAR_DIALS\OMAR_Dials.txt.log","pg.csv")
 #parse_enum(r"C:\Users\admin\Desktop\OMAR_DIALS\R1IPW07_2022-11-22_2_56_04 PM.log", "enum.csv")
-read_dials_from_file(r"Batch_EMA.csv",  pg_path=r"PG.txt.log",
-                                        mtas_path=r"MTAS", 
-                                        ism_path=r"ISM", 
-                                        enum_path=r"ENUM.log")
+read_dials_from_file(r"Batch.csv",  pg_path=r"PG",
+                                    mtas_path=r"MTAS", 
+                                    ism_path=r"ISM", 
+                                    enum_path=r"ENUM")
