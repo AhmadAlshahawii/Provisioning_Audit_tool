@@ -2,7 +2,7 @@
 import json
 import os
 
-VERSION = 2.0
+VERSION = 2.1
 WelcomeMsg = f"\t\tProvisioning Audit Tool v{VERSION}\n"
 
 def parse_pg(filepath, outputfile=None):
@@ -218,53 +218,61 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
                     pass
                 
     # Process ENUM Values
-    enum_data = parse_enum(enum_path)
-    try:
-        for entry in enum_data[1:]:
-            if entry[0] in alldata:
-                alldata[entry[0]]['ENUM']=entry[1]
-            else:
-                print(f"ENUM: ignoring line: \"{entry}\"") 
-    except:
-        print("ENUM ERROR: Faulty dial:" + str(entry))
-        
+    enum_data=None
+    if enum_path:
+        enum_data = parse_enum(enum_path)
+        try:
+            for entry in enum_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['ENUM']=entry[1]
+                else:
+                    print(f"ENUM: ignoring line: \"{entry}\"") 
+        except:
+            print("ENUM ERROR: Faulty dial:" + str(entry))
+            
     # Process ISM Values
-    ism_data = parse_ism(ism_path)
-    try:
-        for entry in ism_data[1:]:
-            if entry[0] in alldata:
-                alldata[entry[0]]['ISM']=entry[1]
-            else:
-                print(f"ISM: ignoring line: \"{entry}\"") 
-    except:
-        print("ISM ERROR: Faulty dial:" + str(entry))
-        
+    ism_data=None
+    if ism_path:
+        ism_data = parse_ism(ism_path)
+        try:
+            for entry in ism_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['ISM']=entry[1]
+                else:
+                    print(f"ISM: ignoring line: \"{entry}\"") 
+        except:
+            print("ISM ERROR: Faulty dial:" + str(entry))
+            
     # Process MTAS Values
-    mtas_data = parse_mtas(mtas_path)
-    try:
-        for entry in mtas_data[1:]:
-            if entry[0] in alldata:
-                alldata[entry[0]]['MTAS']=entry[1]
-                try:
-                    alldata[entry[0]]['DCF']=entry[2]
-                except:
-                    alldata[entry[0]]['DCF']="Error"
-                    print(entry)
-            else:
-                print(f"MTAS: ignoring line: \"{entry}\"") 
-    except:
-        print("MTAS ERROR: Faulty dial:" + str(entry))
-        
+    mtas_data=None
+    if mtas_path:
+        mtas_data = parse_mtas(mtas_path)
+        try:
+            for entry in mtas_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['MTAS']=entry[1]
+                    try:
+                        alldata[entry[0]]['DCF']=entry[2]
+                    except:
+                        alldata[entry[0]]['DCF']="Error"
+                        print(entry)
+                else:
+                    print(f"MTAS: ignoring line: \"{entry}\"") 
+        except:
+            print("MTAS ERROR: Faulty dial:" + str(entry))
+            
     # Process PG Values
-    pg_data = parse_pg(pg_path)
-    try:
-        for entry in pg_data[1:]:
-            if entry[0] in alldata:
-                alldata[entry[0]]['PG']=entry[1]
-            else:
-                print(f"PG: ignoring line: \"{entry}\"")
-    except:
-        print("PG ERROR: Faulty dial:" + str(entry))
+    pg_data=None
+    if pg_path:
+        pg_data = parse_pg(pg_path)
+        try:
+            for entry in pg_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['PG']=entry[1]
+                else:
+                    print(f"PG: ignoring line: \"{entry}\"")
+        except:
+            print("PG ERROR: Faulty dial:" + str(entry))
         
     # Write All results to a file
     with open('Dials_analysis.csv', 'w', newline="") as csv_file:  
@@ -286,13 +294,16 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
                 print("****")
     #['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed']
     # Summary
-    summary_text= ["Summary:\n",
-                    f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tTICK-190:{pg_data[1][5]}\n\tTICK-201:{pg_data[1][6]}\n\tNOT CONNECTED:{pg_data[1][7]}\n\tFailed:{pg_data[1][8]}\n",
-                    f"ISM:\n\tTotal:{ism_data[1][2]}\n\tSuccess:{ism_data[1][3]}\n\tFailed:{ism_data[1][4]}\n",
-                    f"MTAS:\n\tTotal:{mtas_data[1][3]}\n\tSuccess:{mtas_data[1][4]}\n\tFailed:{mtas_data[1][5]}\n\tFailed (excl. login failed):{mtas_data[1][6]}\n\tHave DCF:{mtas_data[1][7]}\n",
-                    f"ENUM:\n\tTotal:{enum_data[1][2]}\n\tSuccess:{enum_data[1][3]}\n\tFailed:{enum_data[1][4]}"
-    ]
-
+    summary_text= ["Summary:\n"                   ]
+    
+    if pg_data:
+        summary_text.append(f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tTICK-190:{pg_data[1][5]}\n\tTICK-201:{pg_data[1][6]}\n\tNOT CONNECTED:{pg_data[1][7]}\n\tFailed:{pg_data[1][8]}\n")
+    if ism_data:
+        summary_text.append(f"ISM:\n\tTotal:{ism_data[1][2]}\n\tSuccess:{ism_data[1][3]}\n\tFailed:{ism_data[1][4]}\n")
+    if mtas_data:
+        summary_text.append(f"MTAS:\n\tTotal:{mtas_data[1][3]}\n\tSuccess:{mtas_data[1][4]}\n\tFailed:{mtas_data[1][5]}\n\tFailed (excl. login failed):{mtas_data[1][6]}\n\tHave DCF:{mtas_data[1][7]}\n")
+    if enum_data:
+        summary_text.append(f"ENUM:\n\tTotal:{enum_data[1][2]}\n\tSuccess:{enum_data[1][3]}\n\tFailed:{enum_data[1][4]}\n")
     for line in summary_text:
         print(line)
 
@@ -304,8 +315,21 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
 #parse_pg(r"C:\Users\admin\Desktop\OMAR_DIALS\OMAR_Dials.txt.log","pg.csv")
 #parse_enum(r"C:\Users\admin\Desktop\OMAR_DIALS\R1IPW07_2022-11-22_2_56_04 PM.log", "enum.csv")
 print(WelcomeMsg)
-read_dials_from_file(r"Batch.csv",  pg_path=r"PG",
-                                    mtas_path=r"MTAS", 
-                                    ism_path=r"ISM", 
-                                    enum_path=r"ENUM")
+pg_path= "PG"
+mtas_path= "MTAS"
+ism_path= "ISM"
+enum_path1= "ENUM"
+
+if not os.path.isfile(pg_path) and not os.access(pg_path, os.R_OK):
+    pg_path= None
+if not os.path.isfile(ism_path) and not os.access(ism_path, os.R_OK):
+    ism_path= None
+if not os.path.isfile(mtas_path) and not os.access(mtas_path, os.R_OK):
+    mtas_path= None
+if not os.path.isfile(enum_path1) and not os.access(enum_path1, os.R_OK):
+    enum_path1= None    
+read_dials_from_file(r"Batch.csv",  pg_path=pg_path,
+                                    mtas_path=mtas_path, 
+                                    ism_path=ism_path, 
+                                    enum_path=enum_path1)
 os.system('pause')
