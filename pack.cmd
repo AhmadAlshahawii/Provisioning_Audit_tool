@@ -1,2 +1,2 @@
 @echo off
-pyarmor pack -e " --onefile" parse.py
+py.exe -3 setup.py bdist_msi
