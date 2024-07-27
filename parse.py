@@ -1,4 +1,4 @@
-﻿import csv, re, time
+import csv, re, time
 import json
 import os
 from sys import exit
@@ -6,7 +6,7 @@ from sys import exit
 import tkinter
 from tkinter import filedialog
 
-VERSION = 2.3
+VERSION = 2.5
 WelcomeMsg = f"\t\tProvisioning Audit Tool v{VERSION}\n"
 
 root = tkinter.Tk()
@@ -248,11 +248,55 @@ def parse_enum(filepath, outputfile=None):
             writer.writerows(requests)
 
     return requests
+#['Dials','Status','Have DCF','Total','Success','Failed','Failed (excl. login failed)','Total Have DCF']
+def parse_esm(filepath, outputfile=None):
+    # define a list with a CSV header
+    requests = [
+                    ['Dials','Status','Have RSA','Total','Success','Failed','Total have RSA']
+               ]
+    requests_count=0
+    requests_failed=0
+    requests_have_rsa=0
+    with open(filepath,'r') as file:
+        for line in file:
+            if "----------------Request for " in line:
+                matches = re.findall(r"\d+", line)
+                requests_count+=1
+                requests.append([matches[0],'Success','False'])
+
+            if "<ns:epsRegionalRoamingServiceAreaId>" in line:
+                requests_have_rsa+=1
+                requests[requests_count][2] = "True"
+
+            if line.startswith("<faultcode>"):
+                matches = re.findall(r"\d+", line)
+                requests[requests_count][1] = f"Failed ({matches[0]})"
+                requests_failed+=1
+                #if matches[0] == '1095':
+                    #requests_loginfailed+=1
+            
+    # Insert "Total, Success, Failed" at row number 2
+    #requests[1].extend([f'{requests_count}',f'{requests_count-requests_failed}',f'{requests_failed}'])
+    # Insert "Total, Success, Failed" at row number 2
+    #requests[1].extend([requests_count,
+                        #requests_failed,
+                        #requests_have_rsa
+                        #])
+    requests[1].extend([f'{requests_count}',f'{requests_count-requests_failed}',f'{requests_failed}',f'{requests_have_rsa}'])
+
+
+    if outputfile is not None:
+        # Write All rows to a csv file
+        with open(outputfile, "w", newline="") as csv_file:
+            writer = csv.writer(csv_file, delimiter=',')
+            writer.writerows(requests)
+
+    return requests
 
 
 alldata = {}
 
-def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
+def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_path):
     # Get Dials from file
     with open(ema_path,'r') as file:
         for line in file:
@@ -262,7 +306,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
                 pass
             else:
                 try:
-                    alldata["20" + matches[0]] = {'PG':"", "ISM":"", "MTAS":"", "DCF":"", "ENUM":""}
+                    alldata["20" + matches[0]] = {'PG':"", "ISM":"", "MTAS":"", "DCF":"", "ENUM":"" , "ESM":"", "RSA":""}
                 except:
                     print(f"Wrong entry found: {matches}")
                     pass
@@ -311,6 +355,24 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
         except:
             print("MTAS ERROR: Faulty dial:" + str(entry))
 
+    # Process ESM Values
+    esm_data=None
+    if esm_path:
+        esm_data = parse_esm(esm_path)
+        try:
+            for entry in esm_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['ESM']=entry[1]
+                    try:
+                        alldata[entry[0]]['RSA']=entry[2]
+                    except:
+                        alldata[entry[0]]['RSA']="Error"
+                        print(entry)
+                else:
+                    print(f"ESM: ignoring line: \"{entry}\"")
+        except:
+            print("ESM ERROR: Faulty dial:" + str(entry))
+
     # Process PG Values
     pg_data=None
     if pg_path:
@@ -336,13 +398,15 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
         # Write alldata from dict to CSV
         for key, value in alldata.items():
             if isinstance(value, dict):
-                writer.writerow([key, value['PG'], value['ISM'], value['MTAS'], value['DCF'], value['ENUM']])
+                writer.writerow([key, value['PG'], value['ISM'], value['MTAS'], value['DCF'], value['ENUM'], value['ESM'], value['RSA']])
             else:
                 print("***skip***")
                 print(key)
                 print(value)
                 print("****")
     #['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed','Total-TICK214','Total-TICK203','Total-TICK205']
+    #['Dials','Status','Have DCF','Total','Success','Failed','Failed (excl. login failed)','Total Have DCF']
+    #['Dials','Status','Have RSA','Total','Success','Failed','Total have RSA']
     # Summary
     summary_text= ["Summary:\n"                   ]
 
@@ -354,6 +418,8 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path):
         summary_text.append(f"MTAS:\n\tTotal:{mtas_data[1][3]}\n\tSuccess:{mtas_data[1][4]}\n\tFailed:{mtas_data[1][5]}\n\tFailed (excl. login failed):{mtas_data[1][6]}\n\tHave DCF:{mtas_data[1][7]}\n")
     if enum_data:
         summary_text.append(f"ENUM:\n\tTotal:{enum_data[1][2]}\n\tSuccess:{enum_data[1][3]}\n\tFailed:{enum_data[1][4]}\n")
+    if esm_data:
+        summary_text.append(f"ESM:\n\tTotal:{esm_data[1][3]}\n\tSuccess:{esm_data[1][4]}\n\tFailed:{esm_data[1][5]}\n\tHave RSA:{esm_data[1][6]}\n")
     for line in summary_text:
         print(line)
 
@@ -376,6 +442,7 @@ pg_path= WORKDIR+"PG"
 mtas_path= WORKDIR+"MTAS"
 ism_path= WORKDIR+"ISM"
 enum_path1= WORKDIR+"ENUM"
+esm_path1= WORKDIR+"ESM"
 
 if not os.path.isfile(pg_path) and not os.access(pg_path, os.R_OK):
     pg_path= None
@@ -385,6 +452,8 @@ if not os.path.isfile(mtas_path) and not os.access(mtas_path, os.R_OK):
     mtas_path= None
 if not os.path.isfile(enum_path1) and not os.access(enum_path1, os.R_OK):
     enum_path1= None
+if not os.path.isfile(esm_path1) and not os.access(esm_path1, os.R_OK):
+    esm_path1= None    
 if not os.path.isfile(WORKDIR+"Batch.csv") and not os.access(WORKDIR+"Batch.csv", os.R_OK):
     print(f"ERROR: Batch.csv is not found in {WORKDIR}")
     exit(1)
@@ -393,5 +462,6 @@ read_dials_from_file(WORKDIR+"Batch.csv",
                                     pg_path=pg_path,
                                     mtas_path=mtas_path,
                                     ism_path=ism_path,
-                                    enum_path=enum_path1)
+                                    enum_path=enum_path1,
+                                    esm_path=esm_path1)
 os.system('pause')
