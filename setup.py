@@ -19,7 +19,7 @@ base = "Win32GUI" if sys.platform == "win32" else None
 
 setup(
     name="proaudit",
-    version="2.5",
+    version="3.0",
     description="Provisioning Audit tool",
     options={
             "build_exe": build_exe_options,

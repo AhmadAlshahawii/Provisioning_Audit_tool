@@ -1,4 +1,4 @@
-import csv, re, time
+﻿import csv, re, time
 import json
 import os
 from sys import exit
@@ -6,7 +6,7 @@ from sys import exit
 import tkinter
 from tkinter import filedialog
 
-VERSION = 2.5
+VERSION = 3.0
 WelcomeMsg = f"\t\tProvisioning Audit Tool v{VERSION}\n"
 
 root = tkinter.Tk()
@@ -23,6 +23,104 @@ def ask_auditfiles_directory_path():
     else:
         return None
 
+
+def parse_pg_nf(filepath, outputfile=None):
+    # define a list with a CSV header
+    requests = [
+                    ['Dials','Status','Total','Total-CBNF','Total-CFNF','Total-CLIRNF','Total-CWNF','Total-NOT CONNECTED','Missing']
+               ]
+    requests_count=0
+    requests_failed=0
+    requsets_success=0
+    requests_stats=0
+    requests_missing=0
+    with open(filepath,'r') as file:
+        stats_found=False
+        CBNF_found=False
+        CFNF_found=False
+        CLIRNF_found=False
+        CWNF_found=False
+        
+        
+        for line in file:
+            if "hgsdp:msisdn=" in line.lower():
+                matches = re.findall(r"\d+", line.lower().split("hgsdp:msisdn")[1]) #Use regex only on the part which contains the phone number
+                requests_count+=1
+                requests.append([matches[0]])
+            
+            
+            if "CBNF-1" in line:
+                CBNF_found=True
+                
+        
+            if "CFNF-1" in line:
+                CFNF_found=True
+                
+                
+            if "CLIRNF-1" in line:
+                CLIRNF_found=True
+                
+                
+            if "CWNF-1" in line:
+                CWNF_found=True
+                
+        
+            if "NOT CONNECTED" in line:
+                stats_found=True
+                requests_stats+=1
+
+            if line.startswith("END"):
+                reqstatus = []
+                if stats_found:
+                    reqstatus.append("NOT CONNECTED")
+                if not CBNF_found:
+                    reqstatus.append("CBNF-1")
+                if not CFNF_found:
+                    reqstatus.append("CFNF-1")
+                if not CLIRNF_found:
+                    reqstatus.append("CLIRNF-1")
+                if not CWNF_found:
+                    reqstatus.append("CWNF-1")    
+
+                #if (not stats_found):
+                #    if (not CBNF_found and not CFNF_found and not CLIRNF_found and not CWNF_found):
+                #        requests_missing+=1
+                #else:
+                #    requests_failed+=1
+
+                
+                    
+                if (reqstatus):
+                    if (reqstatus[0]=="NOT CONNECTED"):
+                        requests[requests_count].extend(["NOT CONNECTED"])
+                        requests_failed+=1
+                    else:    
+                        requests[requests_count].extend(["Missing "+(",").join(reqstatus)])
+                        requests_missing+=1
+                else:
+                    requests[requests_count].extend(["Have all"])
+                    requsets_success+=1
+                stats_found=False
+                CBNF_found=False
+                CFNF_found=False
+                CLIRNF_found=False
+                CWNF_found=False
+                
+    #[f'{requests_count}',f'{requests_count-requests_failed}',f'{requests_failed}']
+    #[requests_count,requests_CBNF,requests_CFNF,requests_CLIRNF,requests_CWNF,requests_stats,requests_failed]
+    #['Dials','Status','Total','Total-CBNF','Total-CFNF','Total-CLIRNF','Total-CWNF','Total-NOT CONNECTED','Missing']
+    try:
+        requests[1].extend([requsets_success,requests_missing,requests_failed])
+    except:
+        print(requests_count)
+
+    if outputfile is not None:
+        # Write All rows to a csv file
+        with open(outputfile, "w", newline="") as csv_file:
+            writer = csv.writer(csv_file, delimiter=',')
+            writer.writerows(requests)
+
+    return requests
 
 def parse_pg(filepath, outputfile=None):
     # define a list with a CSV header
@@ -49,7 +147,7 @@ def parse_pg(filepath, outputfile=None):
         tick214_found=False
         tick203_found=False
         tick205_found=False
-
+        
         for line in file:
             if "hgsdp:msisdn=" in line.lower():
                 matches = re.findall(r"\d+", line.lower().split("hgsdp:msisdn")[1]) #Use regex only on the part which contains the phone number
@@ -59,7 +157,7 @@ def parse_pg(filepath, outputfile=None):
             if "586                           83    NO             IPV4    15" in line:
                 apn_found=True
                 requests_apn+=1
-
+            
             if (not tick_found):
                 if "TICK-215" in line:
                     tick215_found=True
@@ -252,7 +350,7 @@ def parse_enum(filepath, outputfile=None):
 def parse_esm(filepath, outputfile=None):
     # define a list with a CSV header
     requests = [
-                    ['Dials','Status','Have RSA','Total','Success','Failed','Total have RSA']
+                    ['Dials','Status','Have RSA','Total','Success','Failed','Total have RSA','ContextId']
                ]
     requests_count=0
     requests_failed=0
@@ -262,11 +360,20 @@ def parse_esm(filepath, outputfile=None):
             if "----------------Request for " in line:
                 matches = re.findall(r"\d+", line)
                 requests_count+=1
-                requests.append([matches[0],'Success','False'])
+                requests.append([matches[0],'Success','False','','','','',''])
 
             if "<ns:epsRegionalRoamingServiceAreaId>" in line:
                 requests_have_rsa+=1
                 requests[requests_count][2] = "True"
+
+            regex = r"<ns:epsIndividualMappingContextId>(.*?)<\/ns:epsIndividualMappingContextId>"
+            matches = re.finditer(regex, line, re.MULTILINE)
+            for matchNum, match in enumerate(matches, start=1):
+                #print ("Match {matchNum} was found at {start}-{end}: {match}".format(matchNum = matchNum, start = match.start(), end = match.end(), match = match.group()))
+                for groupNum in range(0, len(match.groups())):
+                    groupNum = groupNum + 1
+                    #print ("Group {groupNum} found at {start}-{end}: {group}".format(groupNum = groupNum, start = match.start(groupNum), end = match.end(groupNum), group = match.group(groupNum)))
+                    requests[requests_count][7] += match.group(groupNum) + "," if groupNum>0 else ""
 
             if line.startswith("<faultcode>"):
                 matches = re.findall(r"\d+", line)
@@ -282,8 +389,11 @@ def parse_esm(filepath, outputfile=None):
                         #requests_failed,
                         #requests_have_rsa
                         #])
-    requests[1].extend([f'{requests_count}',f'{requests_count-requests_failed}',f'{requests_failed}',f'{requests_have_rsa}'])
-
+    #requests[1].extend([f'{requests_count}',f'{requests_count-requests_failed}',f'{requests_failed}',f'{requests_have_rsa}'])
+    requests[1][3]=requests_count
+    requests[1][4]=requests_count-requests_failed
+    requests[1][5]=requests_failed
+    requests[1][6]=requests_have_rsa
 
     if outputfile is not None:
         # Write All rows to a csv file
@@ -306,7 +416,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_
                 pass
             else:
                 try:
-                    alldata["20" + matches[0]] = {'PG':"", "ISM":"", "MTAS":"", "DCF":"", "ENUM":"" , "ESM":"", "RSA":""}
+                    alldata["20" + matches[0]] = {'PG':"", 'NF':"", "ISM":"", "MTAS":"", "DCF":"", "ENUM":"" , "ESM":"", "RSA":""}
                 except:
                     print(f"Wrong entry found: {matches}")
                     pass
@@ -363,6 +473,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_
             for entry in esm_data[1:]:
                 if entry[0] in alldata:
                     alldata[entry[0]]['ESM']=entry[1]
+                    alldata[entry[0]]['ContextId']=entry[7]
                     try:
                         alldata[entry[0]]['RSA']=entry[2]
                     except:
@@ -372,6 +483,22 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_
                     print(f"ESM: ignoring line: \"{entry}\"")
         except:
             print("ESM ERROR: Faulty dial:" + str(entry))
+
+
+    # Process PG_NF Values
+    pg_nf_data=None
+    if pg_path:
+        pg_nf_data = parse_pg_nf(pg_path)
+        try:
+            for entry in pg_nf_data[1:]:
+                if entry[0] in alldata:
+                    alldata[entry[0]]['NF']=entry[1]
+                else:
+                    print(f"PG_NF: ignoring line: \"{entry}\"")           
+        except:
+            print("PG_NF ERROR: Faulty dial:" + str(entry))
+        
+
 
     # Process PG Values
     pg_data=None
@@ -398,7 +525,7 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_
         # Write alldata from dict to CSV
         for key, value in alldata.items():
             if isinstance(value, dict):
-                writer.writerow([key, value['PG'], value['ISM'], value['MTAS'], value['DCF'], value['ENUM'], value['ESM'], value['RSA']])
+                writer.writerow([key, value['PG'], value['NF'], value['ISM'], value['MTAS'], value['DCF'], value['ENUM'], value['ESM'], value['RSA'], value['ContextId']])
             else:
                 print("***skip***")
                 print(key)
@@ -407,11 +534,14 @@ def read_dials_from_file(ema_path, pg_path, ism_path, mtas_path, enum_path, esm_
     #['Dials','Status','Total','Total-TICK215','Total-APN586','Total-TICK190','Total-TICK201','Total-NOT CONNECTED','Failed','Total-TICK214','Total-TICK203','Total-TICK205']
     #['Dials','Status','Have DCF','Total','Success','Failed','Failed (excl. login failed)','Total Have DCF']
     #['Dials','Status','Have RSA','Total','Success','Failed','Total have RSA']
+    #['Dials','Status','Total','Total-CBNF','Total-CFNF','Total-CLIRNF','Total-CWNF','Total-NOT CONNECTED','Missing']            
     # Summary
     summary_text= ["Summary:\n"                   ]
 
     if pg_data:
-        summary_text.append(f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tTICK-190:{pg_data[1][5]}\n\tTICK-201:{pg_data[1][6]}\n\tNOT CONNECTED:{pg_data[1][7]}\n\tFailed:{pg_data[1][8]}\n\tTICK-214:{pg_data[1][9]}\n\tTICK-203:{pg_data[1][10]}\n\tTICK-205:{pg_data[1][11]}\n")
+        summary_text.append(f"PG:\n\tTotal:{pg_data[1][2]}\n\tTICK-215:{pg_data[1][3]}\n\tAPN586:{pg_data[1][4]}\n\tTICK-190:{pg_data[1][5]}\n\tTICK-201:{pg_data[1][6]}\n\tNOT CONNECTED:{pg_data[1][7]}\n\tFailed:{pg_data[1][8]}\n\tTICK-214:{pg_data[1][9]}\n\tTICK-203:{pg_data[1][10]}\n\tTICK-205:{pg_data[1][11]}\n")
+    if pg_nf_data:
+        summary_text.append(f"NOT_Flag:\n\tHave all:{pg_nf_data[1][2]}\n\tMissing:{pg_nf_data[1][3]}\n\tNOT CONNECTED:{pg_nf_data[1][4]}\n")
     if ism_data:
         summary_text.append(f"ISM:\n\tTotal:{ism_data[1][2]}\n\tSuccess:{ism_data[1][3]}\n\tFailed:{ism_data[1][4]}\n")
     if mtas_data:
